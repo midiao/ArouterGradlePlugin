@@ -14,7 +14,6 @@ class ARouterPlugin : Plugin<Project> {
     }
 
     override fun apply(project: Project) {
-        // Only app module will use this plugin
         if (project.plugins.hasPlugin(AppPlugin::class.java)) {
             project.extensions.create(EXTENSION_CONFIG_NAME, ARouterConfig::class.java)
             println("Init ARouterGradlePlugin")
@@ -24,23 +23,35 @@ class ARouterPlugin : Plugin<Project> {
             androidComponents.onVariants { variant ->
                 val config = project.extensions.getByType(ARouterConfig::class.java)
 
-                // 完全禁用 Transform
                 if (config.disableTransform) {
                     println("Skip ARouter Transform! (disableTransform=true) variant=${variant.name}")
                     return@onVariants
                 }
 
-                // 仅 Debug 构建时禁用
                 if (config.disableTransformWhenDebugBuild && variant.name.contains("debug", ignoreCase = true)) {
                     println("Skip ARouter Transform When Debug Build! variant=${variant.name}")
                     return@onVariants
                 }
+
+                val arouterBuildDir = project.layout.buildDirectory.dir("intermediates/arouter/${variant.name}")
                 val taskProviderTransformAllClassesTask =
                     project.tasks.register(
                         "${variant.name}TransformAllClassesTask",
                         TransformAllClassesTask::class.java
-                    )
-                // https://github.com/android/gradle-recipes
+                    ) { task ->
+                        task.variantName.set(variant.name)
+                        task.onlyInjectWhenRouteChanged.set(config.onlyInjectWhenRouteChanged)
+                        task.logRouteFingerprint.set(config.logRouteFingerprint)
+                        task.incrementalDirectories.from(task.allDirectories)
+                        task.incrementalJars.from(task.allJars)
+                        task.routeMetadataOutput.set(arouterBuildDir.map { it.file("route-metadata.txt") })
+                        task.routeIndexOutput.set(arouterBuildDir.map { it.file("route-index.json") })
+                        task.routeFingerprintOutput.set(arouterBuildDir.map { it.file("route-fingerprint.txt") })
+                        task.lastAppliedFingerprintOutput.set(arouterBuildDir.map { it.file("last-applied-fingerprint.txt") })
+                        task.cachedInjectedClassOutput.set(arouterBuildDir.map { it.file("LogisticsCenter.injected.class") })
+                        task.routeScanStateOutput.set(arouterBuildDir.map { it.file("route-scan-state.txt") })
+                    }
+
                 variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
                     .use(taskProviderTransformAllClassesTask)
                     .toTransform(
@@ -51,7 +62,5 @@ class ARouterPlugin : Plugin<Project> {
                     )
             }
         }
-
     }
 }
-

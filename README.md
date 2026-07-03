@@ -159,6 +159,20 @@ arouter_config {
 }
 ```
 
+补充：当前版本新增了一个更轻量的复用策略，在不关闭 transform 的前提下，也可以开启如下配置：
+
+```
+arouter_config {
+    onlyInjectWhenRouteChanged = true
+    logRouteFingerprint = false
+}
+```
+
+行为说明：
+- 插件会在 `build/intermediates/arouter/<variant>/` 下输出 `route-metadata.txt`、`route-index.json`、`route-fingerprint.txt`、`route-scan-state.txt` 和缓存的 `LogisticsCenter.injected.class`；
+- 当 transform 任务因为普通业务 class 变化而被重新执行时，会基于 `route-scan-state.txt` 只增量处理变更过的 route class / jar，而不是重新扫描所有路由输入；
+- 如果本次计算出的路由集合和 `LogisticsCenter` 原始字节码都没有变化，会直接复用上次生成的 `LogisticsCenter.class`，跳过再次 ASM 注入；
+- 当前仍保留 `Scope.ALL` 的聚合复制输出流程，所以这不是完整的增量 transform，但已经把“全量扫描路由 + 重复注入”压缩成了“增量路由扫描 + 条件注入复用”。
 
 
 2、 字节码插桩从ASM5升级到ASM7，解决 [issue6](https://github.com/JailedBird/ArouterGradlePlugin/issues/6) 其实我暂时没弄懂这个原理，只是改了插桩API的这个ASM版本参数；

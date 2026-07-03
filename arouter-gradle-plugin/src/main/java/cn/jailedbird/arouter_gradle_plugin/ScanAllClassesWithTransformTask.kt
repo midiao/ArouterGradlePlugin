@@ -151,7 +151,7 @@ abstract class ScanAllClassesWithTransformTask : DefaultTask() {
                             // Skip
                             // println("Find inject byte code, Skip ${entry.name}")
                             jar.getInputStream(entry).use { inputs ->
-                                originInject = inputs.readAllBytes()
+                                originInject = IOUtils.toByteArray(inputs)
                                 // println("Find before originInject is ${originInject?.size}")
                             }
                         }

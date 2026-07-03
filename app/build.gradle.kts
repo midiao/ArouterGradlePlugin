@@ -13,6 +13,7 @@ ksp {
 
 arouter_config {
     disableTransformWhenDebugBuild = false
+    onlyInjectWhenRouteChanged = true
 }
 
 android.sourceSets.all {

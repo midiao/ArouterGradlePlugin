@@ -3,17 +3,27 @@
 package cn.jailedbird.arouter_gradle_plugin
 
 import cn.jailedbird.arouter_gradle_plugin.utils.InjectUtils
+import cn.jailedbird.arouter_gradle_plugin.utils.RouteMetadataUtils
 import cn.jailedbird.arouter_gradle_plugin.utils.ScanSetting
 import cn.jailedbird.arouter_gradle_plugin.utils.ScanUtils
 import org.apache.commons.io.IOUtils
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.Directory
 import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.PathSensitive
+import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.ChangeType
+import org.gradle.work.Incremental
+import org.gradle.work.InputChanges
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
@@ -24,28 +34,63 @@ import java.util.zip.ZipException
 
 abstract class TransformAllClassesTask : DefaultTask() {
 
-    @get:InputFiles
+    @get:Internal
     abstract val allDirectories: ListProperty<Directory>
 
-    @get:InputFiles
+    @get:Internal
     abstract val allJars: ListProperty<RegularFile>
+
+    @get:Incremental
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:InputFiles
+    abstract val incrementalDirectories: ConfigurableFileCollection
+
+    @get:Incremental
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:InputFiles
+    abstract val incrementalJars: ConfigurableFileCollection
+
+    @get:Input
+    abstract val variantName: Property<String>
+
+    @get:Input
+    abstract val onlyInjectWhenRouteChanged: Property<Boolean>
+
+    @get:Input
+    abstract val logRouteFingerprint: Property<Boolean>
 
     @get:OutputFile
     abstract val output: RegularFileProperty
 
+    @get:OutputFile
+    abstract val routeMetadataOutput: RegularFileProperty
+
+    @get:OutputFile
+    abstract val routeIndexOutput: RegularFileProperty
+
+    @get:OutputFile
+    abstract val routeFingerprintOutput: RegularFileProperty
+
+    @get:OutputFile
+    abstract val lastAppliedFingerprintOutput: RegularFileProperty
+
+    @get:OutputFile
+    abstract val cachedInjectedClassOutput: RegularFileProperty
+
+    @get:OutputFile
+    abstract val routeScanStateOutput: RegularFileProperty
+
     @TaskAction
-    fun taskAction() {
+    fun taskAction(inputChanges: InputChanges) {
         println("Welcome to use ArouterGradlePlugin for AGP8: https://github.com/JailedBird/ArouterGradlePlugin")
         println("ArouterGradlePlugin task start:")
         val leftSlash = File.separator == "/"
-        val targetList: List<ScanSetting> = listOf(
-            ScanSetting("IRouteRoot"),
-            ScanSetting("IInterceptorGroup"),
-            ScanSetting("IProviderGroup"),
-        )
         val start = System.currentTimeMillis()
+        val routeMetadata = collectRouteMetadata(inputChanges)
+        debugCollection(routeMetadata.targetList)
+
+        output.asFile.get().parentFile?.mkdirs()
         JarOutputStream(output.asFile.get().outputStream()).use { jarOutput ->
-            // Scan directory (Copy and Collection)
             allDirectories.get().forEach { directory ->
                 val directoryPath =
                     if (directory.asFile.absolutePath.endsWith(File.separatorChar)) {
@@ -53,7 +98,6 @@ abstract class TransformAllClassesTask : DefaultTask() {
                     } else {
                         directory.asFile.absolutePath + File.separatorChar
                     }
-                // println("Directory is $directoryPath")
                 directory.asFile.walk().forEach { file ->
                     if (file.isFile) {
                         val entryName = if (leftSlash) {
@@ -61,16 +105,7 @@ abstract class TransformAllClassesTask : DefaultTask() {
                         } else {
                             file.path.substringAfter(directoryPath).replace(File.separatorChar, '/')
                         }
-                        // println("\tDirectory entry name $entryName")
                         if (entryName.isNotEmpty()) {
-                            // Use stream to detect register, Take care, stream can only be read once,
-                            // So, When Scan and Copy should open different stream;
-                            if (ScanUtils.shouldProcessClass(entryName)) {
-                                file.inputStream().use { input ->
-                                    ScanUtils.scanClass(input, targetList, false)
-                                }
-                            }
-                            // Copy
                             file.inputStream().use { input ->
                                 jarOutput.saveEntry(entryName, input)
                             }
@@ -79,69 +114,197 @@ abstract class TransformAllClassesTask : DefaultTask() {
                 }
             }
 
-            // debugCollection(targetList)
             var originInject: ByteArray? = null
 
-            // Scan Jar, Copy & Scan & Code Inject
             val jars = allJars.get().map { it.asFile }
             for (sourceJar in jars) {
-                // println("Jar file is $sourceJar")
                 val jar = JarFile(sourceJar)
                 val entries = jar.entries()
                 while (entries.hasMoreElements()) {
                     val entry = entries.nextElement()
                     try {
-                        // Exclude directory
                         if (entry.isDirectory || entry.name.isEmpty()) {
                             continue
                         }
-                        // println("\tJar entry is ${entry.name}")
                         if (entry.name != ScanSetting.GENERATE_TO_CLASS_FILE_NAME) {
-                            // Scan and choose
-                            if (ScanUtils.shouldProcessClass(entry.name)) {
-                                jar.getInputStream(entry).use { inputs ->
-                                    ScanUtils.scanClass(inputs, targetList, false)
-                                }
-                            }
-                            // Copy
                             jar.getInputStream(entry).use { input ->
                                 jarOutput.saveEntry(entry.name, input)
                             }
                         } else {
-                            // Skip
-                            // println("Find inject byte code, Skip ${entry.name}")
                             jar.getInputStream(entry).use { inputs ->
-                                originInject = inputs.readAllBytes()
-                                // println("Find before originInject is ${originInject?.size}")
+                                originInject = IOUtils.toByteArray(inputs)
                             }
                         }
                     } catch (e: Exception) {
-                        // Format Optimize: exclude [java.util.zip.ZipException: duplicate entry: META-INF/MANIFEST.MF]
-                        if(e is ZipException && e.message?.contains("META-INF/MANIFEST.MF") == true){
+                        if (e is ZipException && e.message?.contains("META-INF/MANIFEST.MF") == true) {
                             // Skip META-INF/MANIFEST.MF
-                        }else{
+                        } else {
                             println("[Warning] Merge [jar:entry] ${jar.name}:${entry.name}, error is $e ")
                         }
                     }
                 }
                 jar.close()
             }
-            debugCollection(targetList)
-            // Do inject
-            println("Start inject byte code")
-            if (originInject == null) { // Check
-                error("Can not find ARouter inject point, Do you import ARouter?")
+
+            val injectSource = originInject ?: error("Can not find ARouter inject point, Do you import ARouter?")
+            val routeFingerprint = RouteMetadataUtils.computeFingerprint(routeMetadata.routeIndexJson, injectSource)
+            RouteMetadataUtils.writeTextIfChanged(routeFingerprintOutput.asFile.get(), routeFingerprint)
+            if (logRouteFingerprint.getOrElse(false)) {
+                println("ARouter route fingerprint(${variantName.get()})=$routeFingerprint")
+                println("ARouter route index output=${routeIndexOutput.asFile.get().absolutePath}")
             }
-            val resultByteArray = InjectUtils.referHackWhenInit(
-                ByteArrayInputStream(originInject), targetList
-            )
+            val resultByteArray = buildInjectedBytecode(injectSource, routeMetadata.targetList, routeFingerprint)
             jarOutput.saveEntry(
                 ScanSetting.GENERATE_TO_CLASS_FILE_NAME,
                 ByteArrayInputStream(resultByteArray)
             )
-            println("Inject byte code successful")
         }
         println("ARouter plugin inject time spend ${System.currentTimeMillis() - start} ms")
+    }
+
+    private fun collectRouteMetadata(inputChanges: InputChanges): CollectedRouteMetadata {
+        val scanStateFile = routeScanStateOutput.asFile.get()
+        val incrementalScan = inputChanges.isIncremental && scanStateFile.exists()
+        val scanState = if (incrementalScan) {
+            RouteMetadataUtils.readScanState(scanStateFile)
+        } else {
+            linkedMapOf()
+        }
+
+        if (incrementalScan) {
+            applyDirectoryChanges(scanState, inputChanges)
+            applyJarChanges(scanState, inputChanges)
+        } else {
+            fullScan(scanState)
+        }
+
+        val targetList = RouteMetadataUtils.targetListFromScanState(scanState)
+        val routeMetadataText = RouteMetadataUtils.buildRouteMetadataText(targetList)
+        val routeIndexJson = RouteMetadataUtils.buildRouteIndexJson(variantName.get(), targetList)
+        RouteMetadataUtils.writeTextIfChanged(routeMetadataOutput.asFile.get(), routeMetadataText)
+        RouteMetadataUtils.writeTextIfChanged(routeIndexOutput.asFile.get(), routeIndexJson)
+        RouteMetadataUtils.writeScanState(scanStateFile, scanState)
+        println(
+            "ARouter route collection(${variantName.get()}) finished, routeCount=${RouteMetadataUtils.totalRouteCount(targetList)}, incremental=$incrementalScan"
+        )
+        return CollectedRouteMetadata(targetList, routeIndexJson)
+    }
+
+    private fun fullScan(
+        scanState: MutableMap<String, LinkedHashMap<String, MutableSet<String>>>
+    ) {
+        scanState.clear()
+        allDirectories.get().forEach { directory ->
+            val root = directory.asFile
+            if (!root.exists()) {
+                return@forEach
+            }
+            val directoryPath = if (root.absolutePath.endsWith(File.separatorChar)) {
+                root.absolutePath
+            } else {
+                root.absolutePath + File.separatorChar
+            }
+            root.walkTopDown().forEach walkFiles@{ file ->
+                if (!file.isFile) {
+                    return@walkFiles
+                }
+                val entryName = file.absolutePath.substringAfter(directoryPath).replace(File.separatorChar, '/')
+                if (!ScanUtils.shouldProcessClass(entryName)) {
+                    return@walkFiles
+                }
+                RouteMetadataUtils.replaceSourceScanState(
+                    scanState,
+                    directorySourceKey(file),
+                    scanClassFile(file)
+                )
+            }
+        }
+
+        allJars.get().forEach { jar ->
+            val jarFile = jar.asFile
+            if (!jarFile.exists()) {
+                return@forEach
+            }
+            RouteMetadataUtils.replaceSourceScanState(
+                scanState,
+                jarSourceKey(jarFile),
+                scanJarFile(jarFile)
+            )
+        }
+    }
+
+    private fun applyDirectoryChanges(
+        scanState: MutableMap<String, LinkedHashMap<String, MutableSet<String>>>,
+        inputChanges: InputChanges
+    ) {
+        inputChanges.getFileChanges(incrementalDirectories).forEach { change ->
+            val sourceKey = directorySourceKey(change.file)
+            val normalizedPath = change.normalizedPath.replace(File.separatorChar, '/')
+            if (change.changeType == ChangeType.REMOVED || !ScanUtils.shouldProcessClass(normalizedPath)) {
+                scanState.remove(sourceKey)
+                return@forEach
+            }
+            if (!change.file.isFile) {
+                scanState.remove(sourceKey)
+                return@forEach
+            }
+            RouteMetadataUtils.replaceSourceScanState(scanState, sourceKey, scanClassFile(change.file))
+        }
+    }
+
+    private fun applyJarChanges(
+        scanState: MutableMap<String, LinkedHashMap<String, MutableSet<String>>>,
+        inputChanges: InputChanges
+    ) {
+        inputChanges.getFileChanges(incrementalJars).forEach { change ->
+            val sourceKey = jarSourceKey(change.file)
+            if (change.changeType == ChangeType.REMOVED || !change.file.exists()) {
+                scanState.remove(sourceKey)
+                return@forEach
+            }
+            RouteMetadataUtils.replaceSourceScanState(scanState, sourceKey, scanJarFile(change.file))
+        }
+    }
+
+    private fun scanClassFile(file: File): LinkedHashMap<String, MutableSet<String>> {
+        val targetList = RouteMetadataUtils.createTargetList()
+        file.inputStream().use { input ->
+            ScanUtils.scanClass(input, targetList, false)
+        }
+        return RouteMetadataUtils.createSourceRouteState(targetList)
+    }
+
+    private fun scanJarFile(file: File): LinkedHashMap<String, MutableSet<String>> {
+        val targetList = RouteMetadataUtils.createTargetList()
+        ScanUtils.scanJar(file, targetList)
+        return RouteMetadataUtils.createSourceRouteState(targetList)
+    }
+
+    private fun buildInjectedBytecode(
+        originInject: ByteArray,
+        targetList: List<ScanSetting>,
+        routeFingerprint: String
+    ): ByteArray {
+        val lastAppliedFile = lastAppliedFingerprintOutput.asFile.get()
+        val cachedInjectedClassFile = cachedInjectedClassOutput.asFile.get()
+        val canReusePreviousInjection =
+            onlyInjectWhenRouteChanged.getOrElse(true) &&
+                cachedInjectedClassFile.exists() &&
+                RouteMetadataUtils.readTextIfExists(lastAppliedFile) == routeFingerprint
+
+        if (canReusePreviousInjection) {
+            println("ARouter route unchanged, skip inject and reuse cached LogisticsCenter.class")
+            return cachedInjectedClassFile.readBytes()
+        }
+
+        println("Start inject byte code")
+        val resultByteArray = InjectUtils.referHackWhenInit(
+            ByteArrayInputStream(originInject), targetList
+        )
+        RouteMetadataUtils.writeBytesIfChanged(cachedInjectedClassFile, resultByteArray)
+        RouteMetadataUtils.writeTextIfChanged(lastAppliedFile, routeFingerprint)
+        println("Inject byte code successful")
+        return resultByteArray
     }
 
     private fun JarOutputStream.saveEntry(entryName: String, inputStream: InputStream) {
@@ -159,4 +322,17 @@ abstract class TransformAllClassesTask : DefaultTask() {
             }
         }
     }
+
+    private fun directorySourceKey(file: File): String {
+        return "dir:${file.absolutePath}"
+    }
+
+    private fun jarSourceKey(file: File): String {
+        return "jar:${file.absolutePath}"
+    }
+
+    private data class CollectedRouteMetadata(
+        val targetList: List<ScanSetting>,
+        val routeIndexJson: String,
+    )
 }
