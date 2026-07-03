@@ -10,10 +10,21 @@
         android:id="@+id/jump"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Jump"
-        app:layout_constraintBottom_toBottomOf="parent"
+        android:text="Jump Second"
+        app:layout_constraintBottom_toTopOf="@+id/jumpThird"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_chainStyle="packed" />
+
+    <Button
+        android:id="@+id/jumpThird"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Jump Third"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/jump" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

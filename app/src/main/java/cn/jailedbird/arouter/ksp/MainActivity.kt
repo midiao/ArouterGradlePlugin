@@ -32,5 +32,12 @@ class MainActivity : AppCompatActivity() {
                 .withObject("list", mutableListOf("1", "2", "3", "4"))
                 .navigation(this)
         }
+
+        findViewById<Button>(R.id.jumpThird).setOnClickListener {
+            ARouter.getInstance().build("/app/ThirdActivity")
+                .withString("source", "MainActivity")
+                .withString("message", "new route works")
+                .navigation(this)
+        }
     }
 }

@@ -165,6 +165,14 @@ object RouteMetadataUtils {
         return sha256(source.toByteArray())
     }
 
+    fun computeRouteFingerprint(routeIndexJson: String): String {
+        val source = buildString {
+            appendLine(INJECTOR_VERSION)
+            append(routeIndexJson)
+        }
+        return sha256(source.toByteArray())
+    }
+
     fun totalRouteCount(targetList: List<ScanSetting>): Int {
         return targetList.sumOf { it.classList.size }
     }
