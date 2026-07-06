@@ -1,18 +1,20 @@
 package cn.jailedbird.arouter_gradle_plugin
 
 import com.android.build.api.artifact.ScopedArtifact
-import com.android.build.api.instrumentation.FramesComputationMode
-import com.android.build.api.instrumentation.InstrumentationScope
 import com.android.build.api.variant.AndroidComponentsExtension
 import com.android.build.api.variant.ScopedArtifacts
 import com.android.build.gradle.internal.plugins.AppPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.attributes.Attribute
 
 @Suppress("unused")
 class ARouterPlugin : Plugin<Project> {
     companion object {
         const val EXTENSION_CONFIG_NAME = "arouter_config"
+        private val ARTIFACT_TYPE_ATTRIBUTE = Attribute.of("artifactType", String::class.java)
+        private const val ANDROID_CLASSES_JAR_ARTIFACT_TYPE = "android-classes-jar"
+        private const val JAR_ARTIFACT_TYPE = "jar"
     }
 
     override fun apply(project: Project) {
@@ -30,13 +32,10 @@ class ARouterPlugin : Plugin<Project> {
                     return@onVariants
                 }
 
-                if (config.disableTransformWhenDebugBuild && variant.name.contains("debug", ignoreCase = true)) {
-                    println("Skip ARouter Transform When Debug Build! variant=${variant.name}")
-                    return@onVariants
-                }
-
                 val arouterBuildDir = project.layout.buildDirectory.dir("intermediates/arouter/${variant.name}")
                 val capitalizedVariantName = variant.name.replaceFirstChar { it.uppercaseChar() }
+                val runtimeClasspathConfiguration =
+                    project.configurations.findByName("${variant.name}RuntimeClasspath")
 
                 if (config.onlyInjectWhenRouteChanged) {
                     val collectRouteMetadataTask =
@@ -51,6 +50,24 @@ class ARouterPlugin : Plugin<Project> {
                                 project.layout.buildDirectory.dir("intermediates/javac/${variant.name}/classes")
                             )
                             task.classpathInputs.from(variant.compileClasspath)
+                            runtimeClasspathConfiguration?.let { runtimeClasspath ->
+                                task.classpathInputs.from(
+                                    runtimeClasspath.incoming.artifactView { view ->
+                                        view.attributes.attribute(
+                                            ARTIFACT_TYPE_ATTRIBUTE,
+                                            ANDROID_CLASSES_JAR_ARTIFACT_TYPE
+                                        )
+                                    }.files,
+                                    runtimeClasspath.incoming.artifactView { view ->
+                                        view.attributes.attribute(
+                                            ARTIFACT_TYPE_ATTRIBUTE,
+                                            JAR_ARTIFACT_TYPE
+                                        )
+                                    }.files
+                                )
+                            } ?: println(
+                                "ARouter route collection(${variant.name}) runtime classpath not found, fallback to compileClasspath only"
+                            )
                             task.dependsOn(
                                 project.tasks.matching {
                                     it.name in setOf(
@@ -66,16 +83,29 @@ class ARouterPlugin : Plugin<Project> {
                             task.routeScanStateOutput.set(arouterBuildDir.map { it.file("route-scan-state.txt") })
                         }
 
-                    variant.instrumentation.transformClassesWith(
-                        LogisticsCenterTransformFactory::class.java,
-                        InstrumentationScope.ALL,
-                    ) { params ->
-                        params.variantName.set(variant.name)
-                        params.routeMetadataFile.set(collectRouteMetadataTask.flatMap { it.routeMetadataOutput })
-                    }
-                    variant.instrumentation.setAsmFramesComputationMode(
-                        FramesComputationMode.COMPUTE_FRAMES_FOR_INSTRUMENTED_METHODS
-                    )
+                    val injectLogisticsCenterTask =
+                        project.tasks.register(
+                            "${variant.name}InjectLogisticsCenterTask",
+                            InjectLogisticsCenterTask::class.java
+                        ) { task ->
+                            task.variantName.set(variant.name)
+                            task.logRouteFingerprint.set(config.logRouteFingerprint)
+                            task.routeMetadataInput.set(collectRouteMetadataTask.flatMap { it.routeMetadataOutput })
+                            task.routeIndexInput.set(collectRouteMetadataTask.flatMap { it.routeIndexOutput })
+                            task.routeFingerprintOutput.set(arouterBuildDir.map { it.file("inject-fingerprint.txt") })
+                            task.lastAppliedFingerprintOutput.set(arouterBuildDir.map { it.file("last-applied-fingerprint.txt") })
+                            task.cachedInjectedClassOutput.set(arouterBuildDir.map { it.file("LogisticsCenter.injected.class") })
+                            task.dependsOn(collectRouteMetadataTask)
+                        }
+
+                    variant.artifacts.forScope(ScopedArtifacts.Scope.ALL)
+                        .use(injectLogisticsCenterTask)
+                        .toTransform(
+                            ScopedArtifact.CLASSES,
+                            InjectLogisticsCenterTask::allJars,
+                            InjectLogisticsCenterTask::allDirectories,
+                            InjectLogisticsCenterTask::output
+                        )
                 } else {
                     val taskProviderTransformAllClassesTask =
                         project.tasks.register(

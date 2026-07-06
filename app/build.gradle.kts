@@ -12,7 +12,6 @@ ksp {
 }
 
 arouter_config {
-    disableTransformWhenDebugBuild = false
     onlyInjectWhenRouteChanged = true
 }
 

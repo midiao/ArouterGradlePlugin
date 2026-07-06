@@ -17,21 +17,27 @@ import java.util.jar.JarFile
 object ScanUtils {
 
     fun scanJar(jarFile: File, targetList: List<ScanSetting>) {
-        if (jarFile.exists()) {
-            val file = JarFile(jarFile)
+        if (!jarFile.exists()) {
+            return
+        }
+        JarFile(jarFile).use { file ->
             val enumeration = file.entries()
             while (enumeration.hasMoreElements()) {
                 val jarEntry = enumeration.nextElement()
-                if (jarEntry.name.startsWith(ScanSetting.ROUTER_CLASS_PACKAGE_NAME)) {
-                    file.getInputStream(jarEntry).use { inputStream ->
-                        scanClass(inputStream, targetList, false)
-                    }
+                if (jarEntry.isDirectory || !shouldProcessClass(jarEntry.name)) {
+                    continue
+                }
+                file.getInputStream(jarEntry).use { inputStream ->
+                    scanClass(
+                        inputStream = inputStream,
+                        targetList = targetList,
+                        autoClose = false,
+                        sourceDescription = "${jarFile.absolutePath}!/${jarEntry.name}"
+                    )
                 }
             }
-            file.close()
         }
     }
-
 
     @Suppress("unused")
     /**
@@ -42,24 +48,47 @@ object ScanUtils {
     }
 
     fun shouldProcessClass(entryName: String): Boolean {
-        return entryName.startsWith(ScanSetting.ROUTER_CLASS_PACKAGE_NAME)
+        return entryName.startsWith(ScanSetting.ROUTER_CLASS_PACKAGE_NAME) && entryName.endsWith(".class")
     }
 
     @Suppress("unused")
     fun scanClass(file: File, targetList: List<ScanSetting>, autoClose: Boolean = true) {
-        scanClass(FileInputStream(file), targetList, autoClose)
+        scanClass(FileInputStream(file), targetList, autoClose, file.absolutePath)
     }
 
     fun scanClass(
-        inputStream: InputStream, targetList: List<ScanSetting>, autoClose: Boolean = true
+        inputStream: InputStream,
+        targetList: List<ScanSetting>,
+        autoClose: Boolean = true,
+        sourceDescription: String = "unknown"
     ) {
-        val cr = ClassReader(inputStream)
-        val cw = ClassWriter(cr, 0)
-        val cv = ScanClassVisitor(Opcodes.ASM9, cw, targetList)
-        cr.accept(cv, ClassReader.EXPAND_FRAMES)
-        if (autoClose) {
-            inputStream.close()
+        val classBytes = try {
+            inputStream.readBytes()
+        } finally {
+            if (autoClose) {
+                inputStream.close()
+            }
         }
+        if (!isValidClassBytes(classBytes)) {
+            println("[Warning] Skip invalid ARouter route bytecode: $sourceDescription")
+            return
+        }
+        try {
+            val cr = ClassReader(classBytes)
+            val cw = ClassWriter(cr, 0)
+            val cv = ScanClassVisitor(Opcodes.ASM9, cw, targetList)
+            cr.accept(cv, ClassReader.EXPAND_FRAMES)
+        } catch (e: Exception) {
+            println("[Warning] Skip unreadable ARouter route class: $sourceDescription, error=$e")
+        }
+    }
+
+    private fun isValidClassBytes(classBytes: ByteArray): Boolean {
+        return classBytes.size >= 4 &&
+            classBytes[0] == 0xCA.toByte() &&
+            classBytes[1] == 0xFE.toByte() &&
+            classBytes[2] == 0xBA.toByte() &&
+            classBytes[3] == 0xBE.toByte()
     }
 
     class ScanClassVisitor(
