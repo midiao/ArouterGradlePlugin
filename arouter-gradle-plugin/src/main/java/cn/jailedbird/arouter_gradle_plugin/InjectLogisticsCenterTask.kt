@@ -14,11 +14,13 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.work.Incremental
 import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.InputStream
@@ -34,6 +36,17 @@ abstract class InjectLogisticsCenterTask : DefaultTask() {
 
     @get:Internal
     abstract val allJars: ListProperty<RegularFile>
+
+    // 参与增量与输入变更判断，确保业务类变化会触发任务重跑
+    @get:Incremental
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:InputFiles
+    abstract val incrementalDirectories: org.gradle.api.file.ConfigurableFileCollection
+
+    @get:Incremental
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    @get:InputFiles
+    abstract val incrementalJars: org.gradle.api.file.ConfigurableFileCollection
 
     @get:Input
     abstract val variantName: Property<String>

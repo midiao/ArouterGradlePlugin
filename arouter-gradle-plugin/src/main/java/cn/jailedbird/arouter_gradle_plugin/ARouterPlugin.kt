@@ -95,6 +95,9 @@ class ARouterPlugin : Plugin<Project> {
                             task.routeFingerprintOutput.set(arouterBuildDir.map { it.file("inject-fingerprint.txt") })
                             task.lastAppliedFingerprintOutput.set(arouterBuildDir.map { it.file("last-applied-fingerprint.txt") })
                             task.cachedInjectedClassOutput.set(arouterBuildDir.map { it.file("LogisticsCenter.injected.class") })
+                            // 绑定用于增量与变更检测的输入集合，确保业务类变更触发任务执行
+                            task.incrementalDirectories.from(task.allDirectories)
+                            task.incrementalJars.from(task.allJars)
                             task.dependsOn(collectRouteMetadataTask)
                         }
 
