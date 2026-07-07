@@ -1,11 +1,11 @@
 @file:Suppress("SpellCheckingInspection")
 
-package cn.jailedbird.arouter_gradle_plugin
+package com.dahuatech.arouter_gradle_plugin
 
-import cn.jailedbird.arouter_gradle_plugin.utils.InjectUtils
-import cn.jailedbird.arouter_gradle_plugin.utils.RouteMetadataUtils
-import cn.jailedbird.arouter_gradle_plugin.utils.ScanSetting
-import cn.jailedbird.arouter_gradle_plugin.utils.ScanUtils
+import com.dahuatech.arouter_gradle_plugin.utils.InjectUtils
+import com.dahuatech.arouter_gradle_plugin.utils.RouteMetadataUtils
+import com.dahuatech.arouter_gradle_plugin.utils.ScanSetting
+import com.dahuatech.arouter_gradle_plugin.utils.ScanUtils
 import org.apache.commons.io.IOUtils
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection

@@ -1,12 +1,13 @@
 @file:Suppress("SpellCheckingInspection")
 
-package cn.jailedbird.arouter_gradle_plugin
+package com.dahuatech.arouter_gradle_plugin
 
-import cn.jailedbird.arouter_gradle_plugin.utils.InjectUtils
-import cn.jailedbird.arouter_gradle_plugin.utils.RouteMetadataUtils
-import cn.jailedbird.arouter_gradle_plugin.utils.ScanSetting
+import com.dahuatech.arouter_gradle_plugin.utils.InjectUtils
+import com.dahuatech.arouter_gradle_plugin.utils.RouteMetadataUtils
+import com.dahuatech.arouter_gradle_plugin.utils.ScanSetting
 import org.apache.commons.io.IOUtils
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.Directory
 import org.gradle.api.file.RegularFile
 import org.gradle.api.file.RegularFileProperty
@@ -41,12 +42,12 @@ abstract class InjectLogisticsCenterTask : DefaultTask() {
     @get:Incremental
     @get:PathSensitive(PathSensitivity.RELATIVE)
     @get:InputFiles
-    abstract val incrementalDirectories: org.gradle.api.file.ConfigurableFileCollection
+    abstract val incrementalDirectories: ConfigurableFileCollection
 
     @get:Incremental
     @get:PathSensitive(PathSensitivity.RELATIVE)
     @get:InputFiles
-    abstract val incrementalJars: org.gradle.api.file.ConfigurableFileCollection
+    abstract val incrementalJars: ConfigurableFileCollection
 
     @get:Input
     abstract val variantName: Property<String>
@@ -172,7 +173,7 @@ abstract class InjectLogisticsCenterTask : DefaultTask() {
 
     private fun buildInjectedBytecode(
         originInject: ByteArray,
-        targetList: List<cn.jailedbird.arouter_gradle_plugin.utils.ScanSetting>,
+        targetList: List<ScanSetting>,
         routeFingerprint: String
     ): ByteArray {
         val lastAppliedFile = lastAppliedFingerprintOutput.asFile.get()

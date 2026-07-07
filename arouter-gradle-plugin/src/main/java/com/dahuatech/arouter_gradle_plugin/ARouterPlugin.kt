@@ -1,4 +1,4 @@
-package cn.jailedbird.arouter_gradle_plugin
+package com.dahuatech.arouter_gradle_plugin
 
 import com.android.build.api.artifact.ScopedArtifact
 import com.android.build.api.variant.AndroidComponentsExtension

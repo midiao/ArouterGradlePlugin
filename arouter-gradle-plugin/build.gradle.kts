@@ -16,8 +16,8 @@ repositories {
 }
 
 // The project version will be used as your plugin version when publishing.
-group = "io.github.JailedBird"
-version = "1.0.10"
+group = "com.dahuatech"
+version = "1.0.11"
 
 //pluginBundle {
 //    vcsUrl = "https://github.com/JailedBird/ArouterGradlePlugin"
@@ -30,8 +30,8 @@ gradlePlugin {
     vcsUrl = "https://github.com/JailedBird/ArouterGradlePlugin"
     plugins {
         register("ARouterPlugin") {
-            id = "io.github.JailedBird.ARouterPlugin"
-            implementationClass = "cn.jailedbird.arouter_gradle_plugin.ARouterPlugin"
+            id = "com.dahuatech.ARouterPlugin"
+            implementationClass = "com.dahuatech.arouter_gradle_plugin.ARouterPlugin"
             displayName = "Arouter AGP7.4+ plugin with Java 21 support"
             description = "Arouter AGP7.4+ plugin with Java 21 support (ASM 9.7)"
             tags = listOf("Arouter", "AGP7", "Arouter plugin", "AGP8", "Transform", "Auto Register")

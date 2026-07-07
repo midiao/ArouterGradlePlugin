@@ -37,7 +37,7 @@
 
 ## 导入方法
 
-插件发布在 [ArouterPlugin](https://plugins.gradle.org/plugin/io.github.JailedBird.ARouterPlugin) ，点开即可查阅最全面的插件导入方式；
+插件发布在 [ArouterPlugin](https://plugins.gradle.org/plugin/com.dahuatech.ARouterPlugin) ，点开即可查阅最全面的插件导入方式；
 
 **Koltin**
 
@@ -45,7 +45,7 @@ Using the [plugins DSL](https://docs.gradle.org/current/userguide/plugins.html#s
 
 ```kotlin
 plugins {
-    id("io.github.JailedBird.ARouterPlugin") version "1.0.9"
+    id("com.dahuatech.ARouterPlugin") version "1.0.9"
 }
 ```
 
@@ -57,11 +57,11 @@ buildscript {
         gradlePluginPortal()
     }
     dependencies {
-        classpath("io.github.JailedBird:arouter-gradle-plugin:1.0.9")
+        classpath("com.dahuatech:arouter-gradle-plugin:1.0.9")
     }
 }
 
-apply(plugin = "io.github.JailedBird.ARouterPlugin")
+apply(plugin = "com.dahuatech.ARouterPlugin")
 ```
 
 **Grovvy**
@@ -70,7 +70,7 @@ Using the [plugins DSL](https://docs.gradle.org/current/userguide/plugins.html#s
 
 ```groovy
 plugins {
-  id "io.github.JailedBird.ARouterPlugin" version "1.0.9"
+  id "com.dahuatech.ARouterPlugin" version "1.0.9"
 }
 ```
 
@@ -82,11 +82,11 @@ buildscript {
     gradlePluginPortal()
   }
   dependencies {
-    classpath "io.github.JailedBird:arouter-gradle-plugin:1.0.9"
+    classpath "com.dahuatech:arouter-gradle-plugin:1.0.9"
   }
 }
 
-apply plugin: "io.github.JailedBird.ARouterPlugin"
+apply plugin: "com.dahuatech.ARouterPlugin"
 ```
 
 

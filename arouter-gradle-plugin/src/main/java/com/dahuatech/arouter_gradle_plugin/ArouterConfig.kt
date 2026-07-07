@@ -1,4 +1,4 @@
-package cn.jailedbird.arouter_gradle_plugin
+package com.dahuatech.arouter_gradle_plugin
 
 open class ARouterConfig {
     /** 完全禁用 Transform（所有构建类型都不执行） */

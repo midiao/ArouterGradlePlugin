@@ -4,7 +4,7 @@
 The plugin SHALL generate stable route metadata artifacts for each Android variant so route changes can be detected independently from unrelated business class changes.
 
 #### Scenario: First successful metadata collection generates artifacts
-- GIVEN an application variant that applies `io.github.JailedBird.ARouterPlugin`
+- GIVEN an application variant that applies `com.dahuatech.ARouterPlugin`
 - WHEN `CollectRouteMetadataTask` scans the variant project class outputs and compile classpath
 - THEN the plugin generates `route-metadata.txt` under `build/intermediates/arouter/<variant>/`
 - AND the plugin generates `route-index.json` under the same variant directory

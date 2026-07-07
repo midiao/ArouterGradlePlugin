@@ -1,4 +1,4 @@
-package cn.jailedbird.arouter_gradle_plugin.utils
+package com.dahuatech.arouter_gradle_plugin.utils
 
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor

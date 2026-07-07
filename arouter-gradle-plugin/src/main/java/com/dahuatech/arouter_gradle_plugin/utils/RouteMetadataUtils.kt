@@ -1,6 +1,6 @@
 @file:Suppress("SpellCheckingInspection")
 
-package cn.jailedbird.arouter_gradle_plugin.utils
+package com.dahuatech.arouter_gradle_plugin.utils
 
 import java.io.File
 import java.security.MessageDigest
